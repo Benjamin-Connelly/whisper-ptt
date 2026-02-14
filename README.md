@@ -59,16 +59,18 @@ Hold **Right Ctrl** anywhere on your desktop to dictate. Text appears at the cur
 
 ## Configuration
 
-Set the Whisper model via environment variable before starting:
+Environment variables (set in `~/.config/environment.d/whisper.conf` or similar):
 
 ```bash
-# In ~/.config/environment.d/whisper.conf or similar:
-WHISPER_MODEL=small.en    # faster, less accurate
-WHISPER_MODEL=medium.en   # default — good balance
-WHISPER_MODEL=large-v3    # slower, most accurate
+WHISPER_MODEL=small.en        # faster, less accurate
+WHISPER_MODEL=medium.en       # default — good balance
+WHISPER_MODEL=large-v3        # slower, most accurate
 
-WHISPER_LANGUAGE=en       # default — English
-WHISPER_LANGUAGE=fr       # French, etc.
+WHISPER_LANGUAGE=en           # default — English
+WHISPER_LANGUAGE=fr           # French, etc.
+
+WHISPER_KEY=KEY_RIGHTCTRL     # default — see evdev ecodes for key names
+WHISPER_KEY=KEY_RIGHTALT      # example: use Right Alt instead
 ```
 
 ## Uninstall

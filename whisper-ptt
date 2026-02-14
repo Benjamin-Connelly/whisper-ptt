@@ -21,10 +21,15 @@ import evdev
 from evdev import ecodes
 from selectors import DefaultSelector, EVENT_READ
 
-KEY_RIGHTCTRL = ecodes.KEY_RIGHTCTRL
+TRIGGER_KEY_NAME = os.environ.get("WHISPER_KEY", "KEY_RIGHTCTRL")
+TRIGGER_KEY = getattr(ecodes, TRIGGER_KEY_NAME, None)
+if TRIGGER_KEY is None:
+    print(f"Unknown key: {TRIGGER_KEY_NAME}", file=sys.stderr, flush=True)
+    sys.exit(1)
 
 SAMPLE_RATE = 16000
 BLOCK_SIZE = 1024
+BEEP_RATE = 48000
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "medium.en")
 LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "en")
 PRE_BUFFER_SECS = 2
@@ -67,13 +72,27 @@ def load_model():
     return m
 
 
+def beep(freq=880, duration=0.08):
+    """Play a short sine wave tone for audio feedback."""
+    t = np.linspace(0, duration, int(BEEP_RATE * duration), endpoint=False, dtype="float32")
+    # Apply fade-in/fade-out to avoid clicks
+    fade = int(BEEP_RATE * 0.005)
+    tone = 0.3 * np.sin(2 * np.pi * freq * t)
+    tone[:fade] *= np.linspace(0, 1, fade)
+    tone[-fade:] *= np.linspace(1, 0, fade)
+    try:
+        sd.play(tone, samplerate=BEEP_RATE, blocksize=1024)
+    except Exception:
+        pass
+
+
 def find_keyboards():
     devices = []
     for path in evdev.list_devices():
         dev = evdev.InputDevice(path)
         caps = dev.capabilities()
         keys = caps.get(ecodes.EV_KEY, [])
-        if KEY_RIGHTCTRL in keys:
+        if TRIGGER_KEY in keys:
             try:
                 num = int(path.split("event")[-1])
                 if num > 100:
@@ -96,6 +115,7 @@ def audio_callback(indata, frames, time_info, status):
 
 def start_recording():
     global recording
+    beep(freq=880)
     with buffer_lock:
         audio_buffer.clear()
         audio_buffer.extend(pre_buffer)
@@ -106,6 +126,7 @@ def start_recording():
 def stop_and_transcribe():
     global recording
 
+    beep(freq=440)
     time.sleep(TRAIL_SECS)
 
     with buffer_lock:
@@ -141,10 +162,13 @@ def stop_and_transcribe():
 
     print(f"  [{elapsed:.1f}s] {text}", flush=True)
 
-    # Copy to clipboard
+    # Copy to clipboard (wl-copy stays alive to serve paste requests)
     try:
-        proc = subprocess.Popen(["wl-copy"], stdin=subprocess.PIPE)
-        proc.communicate(input=text.encode(), timeout=3)
+        proc = subprocess.Popen(["wl-copy", "--", text])
+        proc.wait(timeout=3)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait()
     except Exception:
         pass
 
@@ -179,7 +203,7 @@ def main():
     )
     stream.start()
 
-    print("Push-to-talk ready (hold Right Ctrl to record):", flush=True)
+    print(f"Push-to-talk ready (hold {TRIGGER_KEY_NAME} to record):", flush=True)
     for kb in keyboards:
         print(f"  {kb.path}: {kb.name}", flush=True)
 
@@ -215,7 +239,7 @@ def main():
                         if event.value == 2:
                             continue
 
-                        if event.code == KEY_RIGHTCTRL:
+                        if event.code == TRIGGER_KEY:
                             if event.value == 1 and not is_recording:
                                 is_recording = True
                                 start_recording()
