@@ -1,0 +1,15 @@
+[Unit]
+Description=Whisper Push-to-Talk (Right Ctrl)
+After=graphical-session.target pipewire.service
+Wants=pipewire.service
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+Environment=LD_LIBRARY_PATH=%h/.local/share/whisper-ptt/venv/lib/python%I/site-packages/nvidia/cublas/lib:%h/.local/share/whisper-ptt/venv/lib/python%I/site-packages/nvidia/cudnn/lib
+ExecStart=%h/.local/bin/whisper-ptt
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
