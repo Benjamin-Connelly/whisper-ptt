@@ -72,16 +72,17 @@ def load_model():
     return m
 
 
-def beep(freq=880, duration=0.08):
-    """Play a short sine wave tone for audio feedback."""
-    t = np.linspace(0, duration, int(BEEP_RATE * duration), endpoint=False, dtype="float32")
-    # Apply fade-in/fade-out to avoid clicks
-    fade = int(BEEP_RATE * 0.005)
-    tone = 0.3 * np.sin(2 * np.pi * freq * t)
-    tone[:fade] *= np.linspace(0, 1, fade)
-    tone[-fade:] *= np.linspace(1, 0, fade)
+def beep(freq=880, duration=0.06):
+    """Play a soft, rounded tone for audio feedback."""
+    samples = int(BEEP_RATE * duration)
+    t = np.linspace(0, duration, samples, endpoint=False, dtype="float32")
+    # Blend fundamental with a softer octave above for a warmer sound
+    tone = np.sin(2 * np.pi * freq * t) + 0.3 * np.sin(2 * np.pi * freq * 2 * t)
+    # Smooth envelope (raised cosine) — no harsh attack or cutoff
+    envelope = 0.5 * (1 - np.cos(2 * np.pi * np.linspace(0, 1, samples)))
+    tone = 0.04 * tone * envelope
     try:
-        sd.play(tone, samplerate=BEEP_RATE, blocksize=1024)
+        sd.play(tone.astype("float32"), samplerate=BEEP_RATE, blocksize=1024)
     except Exception:
         pass
 
