@@ -14,6 +14,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import deque
 import numpy as np
 import sounddevice as sd
 import evdev
@@ -23,15 +24,17 @@ from selectors import DefaultSelector, EVENT_READ
 KEY_RIGHTCTRL = ecodes.KEY_RIGHTCTRL
 
 SAMPLE_RATE = 16000
+BLOCK_SIZE = 1024
 MODEL_SIZE = os.environ.get("WHISPER_MODEL", "medium.en")
+LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "en")
 PRE_BUFFER_SECS = 2
-PRE_BUFFER_SAMPLES = SAMPLE_RATE * PRE_BUFFER_SECS
+PRE_BUFFER_CHUNKS = (SAMPLE_RATE * PRE_BUFFER_SECS) // BLOCK_SIZE
 TRAIL_SECS = 0.5
 
 # Globals
 model = None
 audio_buffer = []
-pre_buffer = []
+pre_buffer = deque(maxlen=PRE_BUFFER_CHUNKS)
 buffer_lock = threading.Lock()
 recording = False
 
@@ -89,10 +92,6 @@ def audio_callback(indata, frames, time_info, status):
             audio_buffer.append(chunk)
         else:
             pre_buffer.append(chunk)
-            total = sum(len(c) for c in pre_buffer)
-            while total > PRE_BUFFER_SAMPLES and len(pre_buffer) > 1:
-                total -= len(pre_buffer[0])
-                pre_buffer.pop(0)
 
 
 def start_recording():
@@ -101,16 +100,16 @@ def start_recording():
         audio_buffer.clear()
         audio_buffer.extend(pre_buffer)
         pre_buffer.clear()
-    recording = True
+        recording = True
 
 
 def stop_and_transcribe():
     global recording
 
     time.sleep(TRAIL_SECS)
-    recording = False
 
     with buffer_lock:
+        recording = False
         if not audio_buffer:
             print("  no audio captured", flush=True)
             return
@@ -128,7 +127,7 @@ def stop_and_transcribe():
     segments, info = model.transcribe(
         audio,
         beam_size=5,
-        language="en",
+        language=LANGUAGE,
         vad_filter=True,
         vad_parameters=dict(min_silence_duration_ms=500),
     )
@@ -176,7 +175,7 @@ def main():
         channels=1,
         dtype="float32",
         callback=audio_callback,
-        blocksize=1024,
+        blocksize=BLOCK_SIZE,
     )
     stream.start()
 

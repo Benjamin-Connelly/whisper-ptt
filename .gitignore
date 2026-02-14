@@ -1,7 +1,12 @@
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
-venv/
 .venv/
+venv/
 dist/
 build/
+artifacts/
+.beads/
+AGENTS.md
+*.log

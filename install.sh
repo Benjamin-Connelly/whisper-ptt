@@ -50,7 +50,6 @@ deactivate
 echo "==> Installing scripts to ${BIN_DIR}..."
 mkdir -p "${BIN_DIR}"
 install -m 755 whisper-ptt "${BIN_DIR}/whisper-ptt"
-install -m 755 handy-ptt   "${BIN_DIR}/handy-ptt"
 
 # Patch shebang to point at the venv Python
 sed -i "1s|.*|#!${VENV_DIR}/bin/python3|" "${BIN_DIR}/whisper-ptt"

@@ -66,11 +66,10 @@ Set the Whisper model via environment variable before starting:
 WHISPER_MODEL=small.en    # faster, less accurate
 WHISPER_MODEL=medium.en   # default — good balance
 WHISPER_MODEL=large-v3    # slower, most accurate
+
+WHISPER_LANGUAGE=en       # default — English
+WHISPER_LANGUAGE=fr       # French, etc.
 ```
-
-## Bonus: handy-ptt
-
-`handy-ptt` is a companion script that bridges keyboard shortcuts to [Handy](https://github.com/nickvdyck/handy) (a separate STT tool). It uses **Ctrl+/** to toggle recording via SIGUSR2 and auto-pastes the result. Installed alongside `whisper-ptt` but independent — only useful if you also run Handy.
 
 ## Uninstall
 

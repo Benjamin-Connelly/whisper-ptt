@@ -12,7 +12,6 @@ systemctl --user disable whisper-ptt.service 2>/dev/null || true
 echo "==> Removing files..."
 rm -f "${SERVICE_DIR}/whisper-ptt.service"
 rm -f "${BIN_DIR}/whisper-ptt"
-rm -f "${BIN_DIR}/handy-ptt"
 
 echo "==> Removing virtual environment..."
 rm -rf "${VENV_DIR}"

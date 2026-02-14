@@ -6,7 +6,7 @@ Wants=pipewire.service
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
-Environment=LD_LIBRARY_PATH=%h/.local/share/whisper-ptt/venv/lib/python%I/site-packages/nvidia/cublas/lib:%h/.local/share/whisper-ptt/venv/lib/python%I/site-packages/nvidia/cudnn/lib
+# LD_LIBRARY_PATH is set dynamically by install.sh with resolved Python version
 ExecStart=%h/.local/bin/whisper-ptt
 Restart=on-failure
 RestartSec=5
