@@ -7,6 +7,4 @@ venv/
 dist/
 build/
 artifacts/
-.beads/
-AGENTS.md
 *.log
