@@ -6,8 +6,8 @@ Uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for transcripti
 
 ## How it works
 
-1. Microphone stays open continuously for instant capture (or on-demand with `WHISPER_LAZY_MIC=1`)
-2. A 2-second pre-buffer captures words spoken before the key press (persistent mic mode only)
+1. Microphone is only opened during recording to avoid claiming Bluetooth profiles
+2. Set `WHISPER_LAZY_MIC=0` for persistent mic with a 2-second pre-buffer (captures speech before key press)
 3. On release, audio is sent through Whisper with VAD filtering
 4. Transcribed text is copied to clipboard (`wl-copy`) and typed (`ydotool`)
 
@@ -37,7 +37,7 @@ cd whisper-ptt
 ./install.sh
 ```
 
-The installer creates a Python venv at `~/.local/share/whisper-ptt/venv`, installs scripts to `~/.local/bin/`, and enables a systemd user service that starts at login.
+The installer creates a Python venv at `~/.local/share/whisper-ptt/venv`, symlinks the script to `~/.local/bin/`, and enables a systemd user service that starts at login. The symlink means `git pull` updates the running version — just restart the service.
 
 ## Usage
 
@@ -72,21 +72,17 @@ WHISPER_LANGUAGE=fr           # French, etc.
 WHISPER_KEY=KEY_RIGHTCTRL     # default — see evdev ecodes for key names
 WHISPER_KEY=KEY_RIGHTALT      # example: use Right Alt instead
 
-WHISPER_LAZY_MIC=1            # only open mic during recording (frees Bluetooth)
+WHISPER_LAZY_MIC=1            # default — only open mic during recording
+WHISPER_LAZY_MIC=0            # persistent mic with 2-second pre-buffer
+
 WHISPER_DEVICE=               # input device name or index (blank = system default)
 ```
 
-### Bluetooth headset sharing
+### Audio device selection
 
-If your Bluetooth headset is paired to multiple devices, the default persistent mic mode
-claims the HFP/HSP profile and prevents the headset from accepting calls on other devices.
-Two options:
-
-- **`WHISPER_LAZY_MIC=1`** — mic is only opened while recording. The headset is free
-  between dictation presses. Loses the 2-second pre-buffer.
-- **`WHISPER_DEVICE=<name>`** — pin whisper-ptt to a specific input (e.g., your laptop's
-  built-in mic). The Bluetooth mic is never claimed. Use `python3 -m sounddevice` to list
-  available devices.
+Pin whisper-ptt to a specific input device (e.g., your laptop's built-in mic) with
+`WHISPER_DEVICE`. Accepts a device name (substring match) or numeric index.
+Use `python3 -m sounddevice` to list available devices.
 
 ## Uninstall
 

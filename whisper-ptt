@@ -4,9 +4,10 @@
 Hold Right Ctrl to record, release to transcribe and type.
 All processing is 100% local — nothing leaves your machine.
 
-By default, the mic stays open for instant capture (no clipping).
-Set WHISPER_LAZY_MIC=1 to only claim the mic during recording —
-useful when a Bluetooth headset is shared across devices.
+By default, the mic is only opened during recording (lazy mode) to
+avoid claiming Bluetooth headset profiles between recordings.
+Set WHISPER_LAZY_MIC=0 to keep the mic open persistently for a
+2-second pre-buffer (captures speech before the key press).
 Set WHISPER_DEVICE to pin a specific input device by name or index.
 """
 
@@ -37,7 +38,7 @@ LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "en")
 PRE_BUFFER_SECS = 2
 PRE_BUFFER_CHUNKS = (SAMPLE_RATE * PRE_BUFFER_SECS) // BLOCK_SIZE
 TRAIL_SECS = 0.5
-LAZY_MIC = os.environ.get("WHISPER_LAZY_MIC", "0") == "1"
+LAZY_MIC = os.environ.get("WHISPER_LAZY_MIC", "1") == "1"
 DEVICE_NAME = os.environ.get("WHISPER_DEVICE")
 
 # Globals

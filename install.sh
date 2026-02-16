@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="${HOME}/.local/share/whisper-ptt/venv"
 BIN_DIR="${HOME}/.local/bin"
 SERVICE_DIR="${HOME}/.config/systemd/user"
@@ -47,12 +48,9 @@ fi
 
 deactivate
 
-echo "==> Installing scripts to ${BIN_DIR}..."
+echo "==> Symlinking script to ${BIN_DIR}..."
 mkdir -p "${BIN_DIR}"
-install -m 755 whisper-ptt "${BIN_DIR}/whisper-ptt"
-
-# Patch shebang to point at the venv Python
-sed -i "1s|.*|#!${VENV_DIR}/bin/python3|" "${BIN_DIR}/whisper-ptt"
+ln -sf "${REPO_DIR}/whisper-ptt" "${BIN_DIR}/whisper-ptt"
 
 echo "==> Installing systemd user service..."
 mkdir -p "${SERVICE_DIR}"
@@ -66,9 +64,9 @@ Wants=pipewire.service
 
 [Service]
 Type=simple
-Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONUNBUFFERED=1 WHISPER_LAZY_MIC=1
 Environment=LD_LIBRARY_PATH=${VENV_DIR}/lib/python${PYTHON_VER}/site-packages/nvidia/cublas/lib:${VENV_DIR}/lib/python${PYTHON_VER}/site-packages/nvidia/cudnn/lib
-ExecStart=${BIN_DIR}/whisper-ptt
+ExecStart=${VENV_DIR}/bin/python3 ${REPO_DIR}/whisper-ptt
 Restart=on-failure
 RestartSec=5
 

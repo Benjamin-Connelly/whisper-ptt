@@ -6,7 +6,7 @@ Wants=pipewire.service
 [Service]
 Type=simple
 Environment=PYTHONUNBUFFERED=1
-# LD_LIBRARY_PATH is set dynamically by install.sh with resolved Python version
+# LD_LIBRARY_PATH and ExecStart are resolved by install.sh with actual paths
 ExecStart=%h/.local/bin/whisper-ptt
 Restart=on-failure
 RestartSec=5
