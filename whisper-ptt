@@ -4,8 +4,10 @@
 Hold Right Ctrl to record, release to transcribe and type.
 All processing is 100% local — nothing leaves your machine.
 
-Mic stays open for instant capture (no clipping). Whisper's VAD
-filter strips silence so the pre/post buffers don't add noise.
+By default, the mic stays open for instant capture (no clipping).
+Set WHISPER_LAZY_MIC=1 to only claim the mic during recording —
+useful when a Bluetooth headset is shared across devices.
+Set WHISPER_DEVICE to pin a specific input device by name or index.
 """
 
 import os
@@ -35,6 +37,8 @@ LANGUAGE = os.environ.get("WHISPER_LANGUAGE", "en")
 PRE_BUFFER_SECS = 2
 PRE_BUFFER_CHUNKS = (SAMPLE_RATE * PRE_BUFFER_SECS) // BLOCK_SIZE
 TRAIL_SECS = 0.5
+LAZY_MIC = os.environ.get("WHISPER_LAZY_MIC", "0") == "1"
+DEVICE_NAME = os.environ.get("WHISPER_DEVICE")
 
 # Globals
 model = None
@@ -42,6 +46,7 @@ audio_buffer = []
 pre_buffer = deque(maxlen=PRE_BUFFER_CHUNKS)
 buffer_lock = threading.Lock()
 recording = False
+stream = None
 
 
 def _setup_cuda_paths():
@@ -87,6 +92,52 @@ def beep(freq=880, duration=0.06):
         pass
 
 
+def resolve_device():
+    """Resolve WHISPER_DEVICE to a PortAudio device index, or None for default."""
+    if not DEVICE_NAME:
+        return None
+    # Try numeric index first
+    try:
+        return int(DEVICE_NAME)
+    except ValueError:
+        pass
+    # Search by substring match in device name
+    for i, dev in enumerate(sd.query_devices()):
+        if dev["max_input_channels"] > 0 and DEVICE_NAME.lower() in dev["name"].lower():
+            return i
+    print(f"Audio device not found: {DEVICE_NAME}", file=sys.stderr, flush=True)
+    print("Available input devices:", file=sys.stderr, flush=True)
+    for i, dev in enumerate(sd.query_devices()):
+        if dev["max_input_channels"] > 0:
+            print(f"  {i}: {dev['name']}", file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
+def open_mic_stream(device_index):
+    """Open and start a mic input stream."""
+    s = sd.InputStream(
+        samplerate=SAMPLE_RATE,
+        channels=1,
+        dtype="float32",
+        callback=audio_callback,
+        blocksize=BLOCK_SIZE,
+        device=device_index,
+    )
+    s.start()
+    return s
+
+
+def close_mic_stream(s):
+    """Stop and close a mic input stream."""
+    if s is None:
+        return
+    try:
+        s.stop()
+        s.close()
+    except Exception:
+        pass
+
+
 def find_keyboards():
     devices = []
     for path in evdev.list_devices():
@@ -114,18 +165,21 @@ def audio_callback(indata, frames, time_info, status):
             pre_buffer.append(chunk)
 
 
-def start_recording():
-    global recording
+def start_recording(device_index):
+    global recording, stream
     beep(freq=880)
+    if LAZY_MIC:
+        stream = open_mic_stream(device_index)
     with buffer_lock:
         audio_buffer.clear()
-        audio_buffer.extend(pre_buffer)
+        if not LAZY_MIC:
+            audio_buffer.extend(pre_buffer)
         pre_buffer.clear()
         recording = True
 
 
 def stop_and_transcribe():
-    global recording
+    global recording, stream
 
     beep(freq=440)
     time.sleep(TRAIL_SECS)
@@ -134,9 +188,16 @@ def stop_and_transcribe():
         recording = False
         if not audio_buffer:
             print("  no audio captured", flush=True)
+            if LAZY_MIC:
+                close_mic_stream(stream)
+                stream = None
             return
         audio = np.concatenate(audio_buffer)
         audio_buffer.clear()
+
+    if LAZY_MIC:
+        close_mic_stream(stream)
+        stream = None
 
     duration = len(audio) / SAMPLE_RATE
     if duration < 0.3:
@@ -185,7 +246,7 @@ def stop_and_transcribe():
 
 
 def main():
-    global model
+    global model, stream
 
     keyboards = find_keyboards()
     if not keyboards:
@@ -194,17 +255,15 @@ def main():
         sys.exit(1)
 
     model = load_model()
+    device_index = resolve_device()
 
-    stream = sd.InputStream(
-        samplerate=SAMPLE_RATE,
-        channels=1,
-        dtype="float32",
-        callback=audio_callback,
-        blocksize=BLOCK_SIZE,
-    )
-    stream.start()
+    if not LAZY_MIC:
+        stream = open_mic_stream(device_index)
 
-    print(f"Push-to-talk ready (hold {TRIGGER_KEY_NAME} to record):", flush=True)
+    mode = "lazy mic" if LAZY_MIC else "persistent mic"
+    dev_label = DEVICE_NAME or "default"
+    print(f"Push-to-talk ready ({mode}, device: {dev_label}, hold {TRIGGER_KEY_NAME}):",
+          flush=True)
     for kb in keyboards:
         print(f"  {kb.path}: {kb.name}", flush=True)
 
@@ -215,8 +274,7 @@ def main():
     is_recording = False
 
     def cleanup(signum=None, frame=None):
-        stream.stop()
-        stream.close()
+        close_mic_stream(stream)
         for kb in keyboards:
             try:
                 selector.unregister(kb)
@@ -243,7 +301,7 @@ def main():
                         if event.code == TRIGGER_KEY:
                             if event.value == 1 and not is_recording:
                                 is_recording = True
-                                start_recording()
+                                start_recording(device_index)
                                 print("  recording...", flush=True)
                             elif event.value == 0 and is_recording:
                                 is_recording = False

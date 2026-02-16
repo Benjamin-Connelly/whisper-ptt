@@ -6,8 +6,8 @@ Uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper) for transcripti
 
 ## How it works
 
-1. Microphone stays open continuously (no startup delay)
-2. A 2-second pre-buffer captures words spoken before the key press
+1. Microphone stays open continuously for instant capture (or on-demand with `WHISPER_LAZY_MIC=1`)
+2. A 2-second pre-buffer captures words spoken before the key press (persistent mic mode only)
 3. On release, audio is sent through Whisper with VAD filtering
 4. Transcribed text is copied to clipboard (`wl-copy`) and typed (`ydotool`)
 
@@ -71,7 +71,22 @@ WHISPER_LANGUAGE=fr           # French, etc.
 
 WHISPER_KEY=KEY_RIGHTCTRL     # default — see evdev ecodes for key names
 WHISPER_KEY=KEY_RIGHTALT      # example: use Right Alt instead
+
+WHISPER_LAZY_MIC=1            # only open mic during recording (frees Bluetooth)
+WHISPER_DEVICE=               # input device name or index (blank = system default)
 ```
+
+### Bluetooth headset sharing
+
+If your Bluetooth headset is paired to multiple devices, the default persistent mic mode
+claims the HFP/HSP profile and prevents the headset from accepting calls on other devices.
+Two options:
+
+- **`WHISPER_LAZY_MIC=1`** — mic is only opened while recording. The headset is free
+  between dictation presses. Loses the 2-second pre-buffer.
+- **`WHISPER_DEVICE=<name>`** — pin whisper-ptt to a specific input (e.g., your laptop's
+  built-in mic). The Bluetooth mic is never claimed. Use `python3 -m sounddevice` to list
+  available devices.
 
 ## Uninstall
 
