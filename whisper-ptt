@@ -78,17 +78,103 @@ def load_model():
     return m
 
 
-def beep(freq=880, duration=0.06):
-    """Play a soft, rounded tone for audio feedback."""
-    samples = int(BEEP_RATE * duration)
-    t = np.linspace(0, duration, samples, endpoint=False, dtype="float32")
-    # Blend fundamental with a softer octave above for a warmer sound
-    tone = np.sin(2 * np.pi * freq * t) + 0.3 * np.sin(2 * np.pi * freq * 2 * t)
-    # Smooth envelope (raised cosine) — no harsh attack or cutoff
-    envelope = 0.5 * (1 - np.cos(2 * np.pi * np.linspace(0, 1, samples)))
-    tone = 0.04 * tone * envelope
+
+def _generate_chirp_wav(kind="start"):
+    """Synthesize a soft WALL-E-style electronic chirp.
+
+    Warm, rounded sine tones with gentle frequency modulation and vibrato.
+    Single ascending note for start, single descending note for stop.
+    Frequency stays in 280-550 Hz (warm, accessible across all age groups).
+    """
+    import tempfile
+    import wave
+
+    if kind == "start":
+        # Single soft ascending note
+        duration = 0.1
+        samples = int(BEEP_RATE * duration)
+        t = np.linspace(0, duration, samples, dtype="float32")
+
+        # Ascending sweep 350→550 Hz
+        freq = 350 + 200 * (t / duration)
+        vibrato = 2 * np.sin(2 * np.pi * 15 * t)
+        phase = 2 * np.pi * np.cumsum(freq + vibrato) / BEEP_RATE
+        tone = np.sin(phase) + 0.15 * np.sin(2 * phase)
+
+        env = np.sin(np.pi * t / duration) ** 0.6
+
+        mixed = 0.25 * tone * env
+    else:
+        # Single soft descending note
+        duration = 0.1
+        samples = int(BEEP_RATE * duration)
+        t = np.linspace(0, duration, samples, dtype="float32")
+
+        # Descending sweep 500→280 Hz
+        freq = 500 - 220 * (t / duration)
+        vibrato = 2 * np.sin(2 * np.pi * 15 * t)
+        phase = 2 * np.pi * np.cumsum(freq + vibrato) / BEEP_RATE
+        tone = np.sin(phase) + 0.15 * np.sin(2 * phase)
+
+        env = np.sin(np.pi * t / duration) ** 0.6
+
+        mixed = 0.25 * tone * env
+
+    # Write 16-bit WAV
+    fd, path = tempfile.mkstemp(suffix=".wav", prefix="whisper-ptt-")
+    os.close(fd)
+    with wave.open(path, "w") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(BEEP_RATE)
+        wf.writeframes((mixed * 32767).astype(np.int16).tobytes())
+    return path
+
+
+# Pre-generate chirp WAV files at import time
+_BEEP_START = _generate_chirp_wav("start")
+_BEEP_STOP = _generate_chirp_wav("stop")
+BEEP_SINK = os.environ.get("WHISPER_BEEP_SINK")
+
+
+def _find_builtin_sink():
+    """Find the built-in audio sink node name for stable beep playback."""
     try:
-        sd.play(tone.astype("float32"), samplerate=BEEP_RATE, blocksize=1024)
+        r = subprocess.run(
+            ["pw-cli", "ls", "Node"],
+            capture_output=True, text=True, timeout=2,
+        )
+        for line in r.stdout.splitlines():
+            if "alsa_output" in line and "analog-stereo" in line:
+                # Extract node name from the line
+                for part in line.split('"'):
+                    if part.startswith("alsa_output"):
+                        return part
+    except Exception:
+        pass
+    return None
+
+
+_BUILTIN_SINK = _find_builtin_sink()
+
+
+def beep(kind="start"):
+    """Play a pre-generated beep via pw-play routed to a stable sink.
+
+    Routes to built-in speakers by default to avoid Bluetooth A2DP/HFP
+    volume inconsistencies. Override with WHISPER_BEEP_SINK env var.
+    """
+    wav = _BEEP_START if kind == "start" else _BEEP_STOP
+    target = BEEP_SINK or _BUILTIN_SINK
+    cmd = ["pw-play", "--volume=1.0", wav]
+    if target:
+        cmd = ["pw-play", "--volume=1.0", f"--target={target}", wav]
+    try:
+        subprocess.Popen(
+            cmd,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
     except Exception:
         pass
 
@@ -168,7 +254,7 @@ def audio_callback(indata, frames, time_info, status):
 
 def start_recording(device_index):
     global recording, stream
-    beep(freq=880)
+    beep("start")
     if LAZY_MIC:
         stream = open_mic_stream(device_index)
     with buffer_lock:
@@ -182,7 +268,7 @@ def start_recording(device_index):
 def stop_and_transcribe():
     global recording, stream
 
-    beep(freq=440)
+    beep("stop")
     time.sleep(TRAIL_SECS)
 
     with buffer_lock:
