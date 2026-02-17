@@ -80,7 +80,7 @@ def load_model():
 
 
 def _generate_chirp_wav(kind="start"):
-    """Synthesize a soft WALL-E-style electronic chirp.
+    """Synthesize a soft electronic chirp.
 
     Warm, rounded sine tones with gentle frequency modulation and vibrato.
     Single ascending note for start, single descending note for stop.
